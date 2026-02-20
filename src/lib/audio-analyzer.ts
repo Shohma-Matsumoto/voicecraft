@@ -217,7 +217,7 @@ export async function analyzeAudio(
 
   // Calculate how much of the expected text was matched
   const matchRatio = useFallback
-    ? 0.75 + Math.random() * 0.2 // simulated
+    ? 0.8 // fallback estimate when speech recognition is unavailable
     : calculateMatchRatio(normalizedTranscript, EXPECTED_TEXT.replace(/[、。\s]/g, ""));
 
   // Generate per-word evaluation
@@ -289,12 +289,12 @@ export async function analyzeAudio(
     ),
   );
 
-  // Intonation: based on dynamic range
+  // Intonation: based on dynamic range (spectral flatness)
   const intonationScore = Math.min(
     100,
     Math.max(
       40,
-      Math.round(60 + (1 - features.spectralFlatness) * 40 + Math.random() * 10),
+      Math.round(60 + (1 - features.spectralFlatness) * 40),
     ),
   );
 

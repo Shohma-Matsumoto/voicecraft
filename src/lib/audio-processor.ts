@@ -226,7 +226,7 @@ export async function processAudio(
   const processedCentroid = spectralCentroid(processedBuffer);
 
   const noiseReductionDb = Math.abs(
-    Math.round((processedRms - originalRms) * 10 + Math.random() * 5 + 12),
+    Math.round((processedRms - originalRms) * 10 + 12),
   );
   const clarityImprovement = Math.min(
     100,
@@ -236,8 +236,7 @@ export async function processAudio(
         ((processedCentroid - originalCentroid) /
           Math.max(originalCentroid, 1)) *
           200 +
-          25 +
-          Math.random() * 10,
+          25,
       ),
     ),
   );

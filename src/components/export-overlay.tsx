@@ -83,7 +83,7 @@ export function ExportOverlay({
 
   return (
     <div className="absolute inset-0 bg-bg/95 z-[200] flex flex-col animate-slide-up">
-      <div className="flex items-center justify-between px-6 pt-16 pb-4">
+      <div className="flex items-center justify-between px-6 pt-8 pb-6">
         <h2 className="font-display text-lg font-bold text-text">
           エクスポート
         </h2>

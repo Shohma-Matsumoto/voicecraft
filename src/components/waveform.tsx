@@ -126,7 +126,7 @@ export function Waveform({ isRecording, analyserNode }: WaveformProps) {
   return (
     <canvas
       ref={canvasRef}
-      className="w-full h-[100px] rounded-xl bg-bg2 border border-border"
+      className="w-full h-[100px] rounded-2xl bg-bg2 border border-border"
       style={{ display: "block" }}
     />
   );

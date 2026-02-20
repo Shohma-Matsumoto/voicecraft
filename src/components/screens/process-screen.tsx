@@ -24,6 +24,7 @@ import {
 } from "@/lib/audio-processor";
 import { analyzeAudio, type AnalysisResult } from "@/lib/audio-analyzer";
 import { audioBufferToWav } from "@/lib/audio-exporter";
+import { getWaveformPeaks, peaksToSvgPath } from "@/lib/waveform-data";
 
 interface ProcessScreenProps {
   originalBuffer: AudioBuffer | null;
@@ -178,8 +179,8 @@ export function ProcessScreen({
     <div className="animate-fade-in">
       <SectionTitle className="mt-2">AI音声処理</SectionTitle>
 
-      <div className="text-center py-6">
-        <div className="mb-3">
+      <div className="text-center py-8">
+        <div className="mb-4">
           {isComplete ? (
             <CheckCircle2
               size={48}
@@ -201,7 +202,7 @@ export function ProcessScreen({
               ? processingLabels[currentInfo.id].label
               : "準備中..."}
         </div>
-        <div className="text-[13px] text-text-dim mt-1.5">
+        <div className="text-[13px] text-text-dim mt-2">
           {isComplete
             ? "すべての処理が完了しました"
             : currentInfo
@@ -210,7 +211,7 @@ export function ProcessScreen({
         </div>
       </div>
 
-      <div className="bg-bg2 border border-border rounded-2xl p-5 mb-3">
+      <div className="bg-bg2 border border-border rounded-2xl p-5 mb-4">
         {STEPS.map((step, i) => {
           const Icon = stepIcons[i];
           const status = statuses[i];
@@ -269,13 +270,13 @@ export function ProcessScreen({
 
       {isComplete && result && (
         <div className="animate-fade-in">
-          <div className="glow-line my-6" />
+          <div className="glow-line my-7" />
           <SectionTitle>Before / After 比較</SectionTitle>
 
-          <div className="rounded-2xl border border-border bg-bg2 p-4 mb-4">
-            <div className="flex gap-3 mb-4">
+          <div className="rounded-2xl border border-border bg-bg2 p-5 mb-5">
+            <div className="flex gap-3 mb-5">
               <button
-                className={`flex-1 flex items-center justify-center gap-1.5 border py-2.5 rounded-lg font-mono text-[12px] tracking-[0.08em] uppercase cursor-pointer transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-2 border py-3 rounded-xl font-mono text-[12px] tracking-[0.08em] uppercase cursor-pointer transition-colors ${
                   playingBefore
                     ? "bg-amber/30 border-amber/50 text-amber"
                     : "bg-amber-dim border-amber/30 text-amber hover:bg-amber/20"
@@ -286,7 +287,7 @@ export function ProcessScreen({
                 Before
               </button>
               <button
-                className={`flex-1 flex items-center justify-center gap-1.5 border py-2.5 rounded-lg font-mono text-[12px] tracking-[0.08em] uppercase cursor-pointer transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-2 border py-3 rounded-xl font-mono text-[12px] tracking-[0.08em] uppercase cursor-pointer transition-colors ${
                   playingAfter
                     ? "bg-cyan/30 border-cyan/50 text-cyan"
                     : "bg-cyan-dim border-cyan/30 text-cyan hover:bg-cyan/20"
@@ -297,19 +298,16 @@ export function ProcessScreen({
               </button>
             </div>
 
-            <div className="flex gap-3 mb-4">
+            {/* Real waveform comparison */}
+            <div className="flex gap-3 mb-5">
               <div className="flex-1 flex flex-col items-center gap-1">
-                <svg
-                  width="100%"
-                  height="48"
-                  viewBox="0 0 140 48"
-                  className="opacity-80"
-                >
-                  <polyline
-                    points="0,24 10,8 15,38 20,12 28,36 33,6 40,30 47,14 53,40 60,10 67,32 72,4 80,28 87,18 93,42 100,8 107,34 114,16 120,38 130,12 140,26"
+                <svg width="100%" height="48" viewBox="0 0 140 48" className="opacity-80">
+                  <path
+                    d={originalBuffer ? peaksToSvgPath(getWaveformPeaks(originalBuffer, 60), 140, 48) : ""}
+                    stroke="rgba(255,179,68,0.6)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
                     fill="none"
-                    stroke="rgba(255,77,109,0.6)"
-                    strokeWidth="2"
                   />
                 </svg>
                 <div className="font-mono text-[9px] uppercase tracking-[0.1em] text-text-dim">
@@ -317,17 +315,13 @@ export function ProcessScreen({
                 </div>
               </div>
               <div className="flex-1 flex flex-col items-center gap-1">
-                <svg
-                  width="100%"
-                  height="48"
-                  viewBox="0 0 140 48"
-                  className="opacity-80"
-                >
-                  <polyline
-                    points="0,24 14,18 28,14 42,18 56,14 70,12 84,16 98,13 112,18 126,15 140,22"
+                <svg width="100%" height="48" viewBox="0 0 140 48" className="opacity-80">
+                  <path
+                    d={peaksToSvgPath(getWaveformPeaks(result.processedBuffer, 60), 140, 48)}
+                    stroke="rgba(0,229,255,0.6)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
                     fill="none"
-                    stroke="rgba(0,229,255,0.5)"
-                    strokeWidth="2.5"
                   />
                 </svg>
                 <div className="font-mono text-[9px] uppercase tracking-[0.1em] text-text-dim">
@@ -336,18 +330,20 @@ export function ProcessScreen({
               </div>
             </div>
 
-            <div className="text-[12px] text-text-dim text-center">
-              ノイズ{" "}
-              <span className="text-red font-mono">
-                -{result.noiseReductionDb}dB
-              </span>{" "}
-              低減
-              <span className="mx-2">&middot;</span>
-              明瞭度{" "}
-              <span className="text-green font-mono">
-                +{result.clarityImprovement}%
-              </span>{" "}
-              向上
+            <div className="flex items-center justify-center gap-6 text-[13px] text-text-dim">
+              <div className="flex items-center gap-1.5">
+                <span className="text-text-dim">ノイズ</span>
+                <span className="text-red font-mono font-bold">
+                  -{result.noiseReductionDb}dB
+                </span>
+              </div>
+              <span className="w-px h-3 bg-border" />
+              <div className="flex items-center gap-1.5">
+                <span className="text-text-dim">明瞭度</span>
+                <span className="text-green font-mono font-bold">
+                  +{result.clarityImprovement}%
+                </span>
+              </div>
             </div>
           </div>
 
