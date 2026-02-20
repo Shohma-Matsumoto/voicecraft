@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>VoiceCraft — プロトタイプ</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Noto+Sans+JP:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07090F;
+    --bg2: #0D1120;
+    --bg3: #141928;
+    --border: rgba(0,229,255,0.12);
+    --cyan: #00E5FF;
+    --cyan-dim: rgba(0,229,255,0.15);
+    --amber: #FFB344;
+    --amber-dim: rgba(255,179,68,0.15);
+    --green: #00FF87;
+    --red: #FF4D6D;
+    --text: #E8EDF5;
+    --text-dim: rgba(232,237,245,0.45);
+    --text-mid: rgba(232,237,245,0.7);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Phone frame */
+  .phone-frame {
+    width: 390px;
+    min-height: 844px;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  /* Noise texture overlay */
+  .phone-frame::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    width: 390px;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.3;
+  }
+
+  /* Status bar */
+  .status-bar {
+    padding: 14px 24px 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-mid);
+    letter-spacing: 0.05em;
+  }
+
+  /* Nav tabs */
+  .nav-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .nav-tab {
+    flex: 1;
+    padding: 10px 0;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    transition: color 0.2s;
+    border-bottom: 2px solid transparent;
+    font-family: 'DM Mono', monospace;
+    text-transform: uppercase;
+  }
+  .nav-tab.active {
+    color: var(--cyan);
+    border-bottom-color: var(--cyan);
+  }
+
+  /* Screens */
+  .screen { display: none; padding: 16px 24px 100px; }
+  .screen.active { display: block; }
+
+  /* Waveform canvas */
+  #waveCanvas {
+    width: 100%;
+    height: 100px;
+    border-radius: 12px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+  }
+
+  /* Big record button */
+  .record-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 32px 0 24px;
+    gap: 16px;
+  }
+  .record-ring {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,229,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .record-ring.recording {
+    border-color: var(--red);
+    animation: pulse-ring 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse-ring {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,77,109,0.4); }
+    50% { box-shadow: 0 0 0 20px rgba(255,77,109,0); }
+  }
+  .record-btn {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--cyan), #0088AA);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 0 32px rgba(0,229,255,0.3);
+  }
+  .record-btn.recording {
+    background: linear-gradient(135deg, var(--red), #AA0033);
+    box-shadow: 0 0 32px rgba(255,77,109,0.4);
+  }
+  .record-btn:active { transform: scale(0.95); }
+  .record-icon { font-size: 32px; }
+
+  .record-status {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .record-status.recording { color: var(--red); animation: blink 1s step-end infinite; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Timer */
+  .timer {
+    font-family: 'Space Mono', monospace;
+    font-size: 36px;
+    font-weight: 700;
+    text-align: center;
+    color: var(--text);
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+  .timer span { color: var(--cyan); }
+
+  /* Noise indicator row */
+  .noise-row {
+    display: flex;
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .noise-badge {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+  }
+  .noise-badge .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+  }
+  .noise-badge.warn .dot { background: var(--amber); animation: blink 0.8s step-end infinite; }
+  .noise-badge.active-detect .dot { background: var(--red); animation: blink 0.5s step-end infinite; }
+  .noise-badge .label { color: var(--text-dim); font-size: 10px; letter-spacing: 0.05em; }
+
+  /* Script area */
+  .script-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+    line-height: 2;
+    font-size: 15px;
+    font-weight: 300;
+    color: var(--text-mid);
+    position: relative;
+  }
+  .script-box .tag {
+    position: absolute;
+    top: -10px;
+    left: 12px;
+    background: var(--bg);
+    padding: 0 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--cyan);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .script-box .highlight { color: var(--amber); }
+
+  /* Section title */
+  .section-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Processing screen */
+  .process-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 12px;
+  }
+  .process-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 14px;
+  }
+  .process-item:last-child { border-bottom: none; }
+  .process-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .process-icon.cyan { background: var(--cyan-dim); }
+  .process-icon.amber { background: var(--amber-dim); }
+  .process-icon.green { background: rgba(0,255,135,0.1); }
+  .process-label { flex: 1; }
+  .process-label .name { font-weight: 500; font-size: 13px; }
+  .process-label .desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .process-status {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+  .process-status.done { background: rgba(0,255,135,0.1); color: var(--green); }
+  .process-status.running { background: var(--cyan-dim); color: var(--cyan); animation: blink 1s step-end infinite; }
+  .process-status.wait { background: rgba(255,255,255,0.05); color: var(--text-dim); }
+
+  /* Before/After slider */
+  .compare-wrap {
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin: 16px 0;
+    background: var(--bg2);
+    padding: 16px;
+  }
+  .compare-bars {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    height: 60px;
+    margin-bottom: 12px;
+  }
+  .bar-before, .bar-after {
+    flex: 1;
+    border-radius: 4px 4px 0 0;
+    position: relative;
+  }
+  .bar-before { background: rgba(255,77,109,0.3); border: 1px solid rgba(255,77,109,0.4); }
+  .bar-after { background: rgba(0,229,255,0.15); border: 1px solid rgba(0,229,255,0.3); }
+  .bar-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-align: center;
+    margin-top: 6px;
+    color: var(--text-dim);
+  }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0;
+  }
+  .slider-row label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+    width: 50px;
+    text-align: right;
+    text-transform: uppercase;
+  }
+  input[type=range] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 2px;
+    background: linear-gradient(to right, var(--cyan) 0%, var(--cyan) 60%, rgba(255,255,255,0.15) 60%);
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+    cursor: pointer;
+  }
+  .play-btn {
+    background: var(--cyan-dim);
+    border: 1px solid rgba(0,229,255,0.3);
+    color: var(--cyan);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .play-btn:hover { background: rgba(0,229,255,0.25); }
+  .play-btn.amber {
+    background: var(--amber-dim);
+    border-color: rgba(255,179,68,0.3);
+    color: var(--amber);
+  }
+  .btn-row { display: flex; gap: 10px; margin-top: 12px; }
+
+  /* Evaluation screen */
+  .score-ring-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 24px 0 32px;
+  }
+  .score-ring {
+    width: 130px;
+    height: 130px;
+    position: relative;
+  }
+  .score-ring svg { transform: rotate(-90deg); }
+  .score-ring .score-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--cyan);
+    line-height: 1;
+  }
+  .score-ring .score-num small {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-weight: 400;
+    margin-top: 2px;
+  }
+
+  /* Evaluation items */
+  .eval-item {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .eval-item .eval-icon { font-size: 18px; margin-top: 1px; }
+  .eval-item .eval-word {
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 4px;
+  }
+  .eval-item .eval-word .pitch { font-size: 11px; font-family: 'DM Mono', monospace; }
+  .eval-item .eval-word .pitch.wrong { color: var(--red); }
+  .eval-item .eval-word .pitch.right { color: var(--green); }
+  .eval-item .eval-desc { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+  .eval-item .eval-tip {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: var(--amber-dim);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--amber);
+    line-height: 1.5;
+  }
+
+  /* Metric bars */
+  .metric-row {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .metric-item { display: flex; gap: 10px; align-items: center; }
+  .metric-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    width: 72px;
+    flex-shrink: 0;
+  }
+  .metric-bar {
+    flex: 1;
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .metric-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--cyan);
+    transition: width 1s ease-out;
+  }
+  .metric-fill.amber { background: var(--amber); }
+  .metric-fill.green { background: var(--green); }
+  .metric-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--cyan);
+    width: 32px;
+    text-align: right;
+  }
+
+  /* History screen */
+  .history-item {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 12px;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .history-item:hover { border-color: rgba(0,229,255,0.3); }
+  .history-thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .history-info { flex: 1; }
+  .history-info .h-title { font-weight: 500; font-size: 14px; margin-bottom: 4px; }
+  .history-info .h-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .score-badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--cyan-dim);
+    color: var(--cyan);
+    border: 1px solid rgba(0,229,255,0.2);
+  }
+  .score-badge.high { background: rgba(0,255,135,0.1); color: var(--green); border-color: rgba(0,255,135,0.2); }
+
+  /* Bottom navigation */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    width: 390px;
+    background: rgba(7,9,15,0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 10px 0 24px;
+    z-index: 50;
+  }
+  .bnav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: opacity 0.2s;
+  }
+  .bnav-item .bnav-icon { font-size: 22px; }
+  .bnav-item .bnav-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    transition: color 0.2s;
+  }
+  .bnav-item.active .bnav-label { color: var(--cyan); }
+  .bnav-item.active .bnav-icon { filter: drop-shadow(0 0 6px var(--cyan)); }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 20px 0;
+  }
+
+  /* Chip */
+  .chip {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: var(--cyan-dim);
+    color: var(--cyan);
+    border: 1px solid rgba(0,229,255,0.2);
+  }
+  .chip.amber { background: var(--amber-dim); color: var(--amber); border-color: rgba(255,179,68,0.2); }
+
+  .big-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+    background: linear-gradient(135deg, var(--cyan), #0088AA);
+    color: #000;
+    box-shadow: 0 4px 20px rgba(0,229,255,0.25);
+    margin-top: 16px;
+  }
+  .big-btn:active { transform: scale(0.98); }
+
+  /* Glow line */
+  .glow-line {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--cyan), transparent);
+    margin: 24px 0;
+    opacity: 0.4;
+  }
+
+  /* App header */
+  .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 24px 12px;
+  }
+  .app-logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--cyan);
+  }
+  .app-logo span { color: var(--text-dim); font-weight: 400; }
+  .header-action {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .spin { animation: spin 1.5s linear infinite; }
+
+  /* Desktop info banner */
+  .desktop-banner {
+    width: 100%;
+    max-width: 800px;
+    text-align: center;
+    padding: 40px 24px 24px;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .desktop-banner h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    color: var(--cyan);
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+  .desktop-banner p { color: var(--text-mid); font-size: 13px; }
+
+  @media (min-width: 600px) {
+    body { padding-top: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="desktop-banner">
+  <h1>VoiceCraft</h1>
+  <p>素人でも、プロ品質の音声がサクッと作れる — インタラクティブUIプロトタイプ</p>
+</div>
+
+<div class="phone-frame">
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span>9:41</span>
+    <span>●●● WiFi ■■■ 95%</span>
+  </div>
+
+  <!-- App header -->
+  <div class="app-header">
+    <div class="app-logo">Voice<span>Craft</span></div>
+    <div class="header-action">⚙️</div>
+  </div>
+
+  <!-- SCREEN: 録音 -->
+  <div class="screen active" id="screen-record">
+    <div class="section-title">今日のお題</div>
+    <div class="script-box">
+      <span class="tag">SCRIPT</span>
+      <span class="highlight">東京</span>の春は、<span class="highlight">雨</span>と晴れが繰り返す季節です。
+      <span class="highlight">橋</span>の上から桜を眺めると、花びらが川面に舞い落ちていきます。
+    </div>
+
+    <canvas id="waveCanvas"></canvas>
+
+    <!-- Timer -->
+    <div class="timer" style="margin-top:16px"><span id="timerDisplay">00:00</span></div>
+
+    <!-- Record button -->
+    <div class="record-wrap">
+      <div class="record-ring" id="recordRing">
+        <div class="record-btn" id="recordBtn" onclick="toggleRecord()">
+          <span class="record-icon" id="recordIcon">🎙️</span>
+        </div>
+      </div>
+      <span class="record-status" id="recordStatus">タップして録音開始</span>
+    </div>
+
+    <!-- Noise indicators -->
+    <div class="noise-row" id="noiseRow">
+      <div class="noise-badge" id="badge-lip">
+        <div class="dot"></div>
+        <div>リップノイズ</div>
+        <div class="label">クリーン</div>
+      </div>
+      <div class="noise-badge" id="badge-bg">
+        <div class="dot"></div>
+        <div>背景ノイズ</div>
+        <div class="label">低</div>
+      </div>
+      <div class="noise-badge" id="badge-level">
+        <div class="dot"></div>
+        <div>音量レベル</div>
+        <div class="label">適正</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <button class="big-btn" id="toProcessBtn" onclick="goToProcess()" style="display:none;">
+      ✨ AI処理を開始
+    </button>
+  </div>
+
+  <!-- SCREEN: AI処理 -->
+  <div class="screen" id="screen-process">
+    <div class="section-title" style="margin-top:8px">AI音声処理</div>
+
+    <div style="text-align:center; padding: 24px 0;">
+      <div style="font-size:48px; margin-bottom:12px;" id="processEmoji">✨</div>
+      <div style="font-family:'Space Mono',monospace; font-size:18px; color:var(--cyan);" id="processTitle">ノイズ除去中…</div>
+      <div style="font-size:13px; color:var(--text-dim); margin-top:6px;" id="processDesc">リップノイズを検出して除去しています</div>
+    </div>
+
+    <div class="process-card">
+      <div class="process-item">
+        <div class="process-icon cyan">🔇</div>
+        <div class="process-label">
+          <div class="name">リップノイズ除去</div>
+          <div class="desc">口の開閉音・吐息音を除去</div>
+        </div>
+        <div class="process-status" id="ps1">running</div>
+      </div>
+      <div class="process-item">
+        <div class="process-icon cyan">🌊</div>
+        <div class="process-label">
+          <div class="name">ホワイトノイズ除去</div>
+          <div class="desc">背景ノイズをAIで低減</div>
+        </div>
+        <div class="process-status wait" id="ps2">待機中</div>
+      </div>
+      <div class="process-item">
+        <div class="process-icon amber">📊</div>
+        <div class="process-label">
+          <div class="name">ダイナミクス整形</div>
+          <div class="desc">音量ムラをコンプレッサーで均す</div>
+        </div>
+        <div class="process-status wait" id="ps3">待機中</div>
+      </div>
+      <div class="process-item">
+        <div class="process-icon amber">🎚️</div>
+        <div class="process-label">
+          <div class="name">EQ & De-esser</div>
+          <div class="desc">音質を最適化</div>
+        </div>
+        <div class="process-status wait" id="ps4">待機中</div>
+      </div>
+      <div class="process-item">
+        <div class="process-icon green">🎯</div>
+        <div class="process-label">
+          <div class="name">アクセント評価</div>
+          <div class="desc">日本語のアクセントを分析</div>
+        </div>
+        <div class="process-status wait" id="ps5">待機中</div>
+      </div>
+    </div>
+
+    <div style="display:none" id="compareSection">
+      <div class="glow-line"></div>
+      <div class="section-title">Before / After 比較</div>
+      <div class="compare-wrap">
+        <div style="display:flex; gap:12px; margin-bottom:16px;">
+          <button class="play-btn amber" style="flex:1; justify-content:center;">▶ Before</button>
+          <button class="play-btn" style="flex:1; justify-content:center;">▶ After</button>
+        </div>
+        <div class="compare-bars">
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
+            <!-- Noisy waveform (jagged) -->
+            <svg width="100%" height="48" viewBox="0 0 140 48">
+              <polyline points="0,24 10,8 15,38 20,12 28,36 33,6 40,30 47,14 53,40 60,10 67,32 72,4 80,28 87,18 93,42 100,8 107,34 114,16 120,38 130,12 140,26" fill="none" stroke="rgba(255,77,109,0.6)" stroke-width="2"/>
+            </svg>
+            <div class="bar-label">Before</div>
+          </div>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
+            <!-- Clean waveform (smooth) -->
+            <svg width="100%" height="48" viewBox="0 0 140 48">
+              <polyline points="0,24 14,16 28,10 42,16 56,10 70,8 84,14 98,10 112,16 126,12 140,20" fill="none" stroke="rgba(0,229,255,0.5)" stroke-width="2.5"/>
+            </svg>
+            <div class="bar-label">After</div>
+          </div>
+        </div>
+        <div style="font-size:12px; color:var(--text-dim); text-align:center; margin-top:4px;">
+          ノイズ <span style="color:var(--red)">-18dB</span> 低減 · 明瞭度 <span style="color:var(--green)">+34%</span> 向上
+        </div>
+      </div>
+      <button class="big-btn" onclick="goToEval()">📊 アクセント評価を見る</button>
+    </div>
+  </div>
+
+  <!-- SCREEN: 評価 -->
+  <div class="screen" id="screen-eval">
+    <div class="section-title" style="margin-top:8px">アクセント評価</div>
+
+    <div class="score-ring-wrap">
+      <div class="score-ring">
+        <svg width="130" height="130" viewBox="0 0 130 130">
+          <circle cx="65" cy="65" r="56" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="8"/>
+          <circle cx="65" cy="65" r="56" fill="none" stroke="url(#grad)" stroke-width="8"
+            stroke-dasharray="352" stroke-dashoffset="80" stroke-linecap="round"/>
+          <defs>
+            <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:#00E5FF"/>
+              <stop offset="100%" style="stop-color:#00FF87"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="score-num">82<small>/ 100</small></div>
+      </div>
+      <div style="margin-top:12px; text-align:center;">
+        <span class="chip">発音 良好</span>
+        <span style="font-family:'DM Mono',monospace; font-size:11px; color:var(--text-dim); margin-left:8px;">3箇所に改善ポイント</span>
+      </div>
+    </div>
+
+    <div class="section-title">指摘箇所</div>
+
+    <div class="eval-item">
+      <div class="eval-icon">⚠️</div>
+      <div>
+        <div class="eval-word">「雨」<span class="pitch wrong"> ▼▼ 平板型になっています</span></div>
+        <div class="eval-desc">「あめ」は起伏型 (LH) が標準アクセントです。最初の音を低く、2音目を高く発音しましょう。</div>
+        <div class="eval-tip">💡 「飴（あめ）」と区別するためにも、より高く発音するのがポイントです</div>
+      </div>
+    </div>
+
+    <div class="eval-item">
+      <div class="eval-icon">❌</div>
+      <div>
+        <div class="eval-word">「橋」<span class="pitch wrong"> アクセント不明確</span></div>
+        <div class="eval-desc">「橋 (LH)」と「箸 (HL)」の区別が曖昧です。文脈から「橋」を意図していますが、アクセントが逆転しています。</div>
+        <div class="eval-tip">💡 橋＝最初の音を低く。箸＝最初の音を高く。で覚えましょう</div>
+      </div>
+    </div>
+
+    <div class="eval-item">
+      <div class="eval-icon">✅</div>
+      <div>
+        <div class="eval-word">「東京」<span class="pitch right"> ◎ 正確</span></div>
+        <div class="eval-desc">LHHLの正しいアクセントパターンで発音できています。</div>
+      </div>
+    </div>
+
+    <div class="glow-line"></div>
+    <div class="section-title">詳細スコア</div>
+
+    <div class="metric-row">
+      <div class="metric-item">
+        <div class="metric-name">アクセント</div>
+        <div class="metric-bar"><div class="metric-fill" style="width:82%"></div></div>
+        <div class="metric-val">82</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-name">発話速度</div>
+        <div class="metric-bar"><div class="metric-fill green" style="width:90%"></div></div>
+        <div class="metric-val" style="color:var(--green)">90</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-name">イントネーション</div>
+        <div class="metric-bar"><div class="metric-fill amber" style="width:65%"></div></div>
+        <div class="metric-val" style="color:var(--amber)">65</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-name">明瞭度</div>
+        <div class="metric-bar"><div class="metric-fill" style="width:88%"></div></div>
+        <div class="metric-val">88</div>
+      </div>
+    </div>
+
+    <button class="big-btn" onclick="goToExport()">📤 エクスポート</button>
+  </div>
+
+  <!-- SCREEN: 履歴 -->
+  <div class="screen" id="screen-history">
+    <div class="section-title" style="margin-top:8px">録音履歴</div>
+
+    <div class="history-item" onclick="goToEval()">
+      <div class="history-thumb">🎙️</div>
+      <div class="history-info">
+        <div class="h-title">東京の春ナレーション</div>
+        <div class="h-meta">2026.02.20 · 00:18 · AI処理済</div>
+      </div>
+      <div class="score-badge high">82</div>
+    </div>
+
+    <div class="history-item">
+      <div class="history-thumb">📖</div>
+      <div class="history-info">
+        <div class="h-title">自己紹介練習 #3</div>
+        <div class="h-meta">2026.02.19 · 00:42 · AI処理済</div>
+      </div>
+      <div class="score-badge">74</div>
+    </div>
+
+    <div class="history-item">
+      <div class="history-thumb">🎤</div>
+      <div class="history-info">
+        <div class="h-title">CM原稿 vol.2</div>
+        <div class="h-meta">2026.02.17 · 01:05 · AI処理済</div>
+      </div>
+      <div class="score-badge">69</div>
+    </div>
+
+    <div class="glow-line"></div>
+    <div class="section-title">スコア推移</div>
+    <div style="background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:16px;">
+      <svg width="100%" height="80" viewBox="0 0 300 80">
+        <polyline points="10,60 60,52 110,45 160,50 210,38 260,26 290,18" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="10" cy="60" r="4" fill="var(--cyan)"/>
+        <circle cx="60" cy="52" r="4" fill="var(--cyan)"/>
+        <circle cx="110" cy="45" r="4" fill="var(--cyan)"/>
+        <circle cx="160" cy="50" r="4" fill="var(--cyan)"/>
+        <circle cx="210" cy="38" r="4" fill="var(--cyan)"/>
+        <circle cx="260" cy="26" r="4" fill="var(--cyan)"/>
+        <circle cx="290" cy="18" r="5" fill="var(--green)" filter="url(#glow)"/>
+        <defs>
+          <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+      </svg>
+      <div style="display:flex; justify-content:space-between; font-family:'DM Mono',monospace; font-size:9px; color:var(--text-dim); margin-top:4px;">
+        <span>2/14</span><span>2/15</span><span>2/16</span><span>2/17</span><span>2/18</span><span>2/19</span><span>2/20</span>
+      </div>
+      <div style="text-align:center; font-size:12px; color:var(--text-dim); margin-top:8px;">
+        先週比 <span style="color:var(--green); font-family:'DM Mono',monospace;">+13pt</span> 上達中 🎉
+      </div>
+    </div>
+  </div>
+
+  <!-- Export overlay (hidden initially) -->
+  <div id="exportOverlay" style="display:none; position:absolute; inset:0; background:rgba(7,9,15,0.95); z-index:200; padding:80px 24px 24px; flex-direction:column;">
+    <div class="section-title">エクスポート</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px;">
+      <div class="chip active" style="cursor:pointer;">MP3</div>
+      <div class="chip" style="cursor:pointer; opacity:0.5;">WAV</div>
+      <div class="chip" style="cursor:pointer; opacity:0.5;">M4A</div>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:32px;">
+      <div class="chip amber">SNS用 (128kbps)</div>
+      <div class="chip" style="cursor:pointer; opacity:0.5;">標準</div>
+      <div class="chip" style="cursor:pointer; opacity:0.5;">高品質</div>
+    </div>
+    <button class="big-btn" style="margin-top:0;" onclick="document.getElementById('exportOverlay').style.display='none'">⬇️ ダウンロード</button>
+    <button class="big-btn" style="background:var(--bg2); color:var(--text); box-shadow:none; margin-top:12px; border:1px solid var(--border);" onclick="document.getElementById('exportOverlay').style.display='none'">キャンセル</button>
+  </div>
+
+  <!-- Bottom nav -->
+  <div class="bottom-nav">
+    <div class="bnav-item active" id="bnav-record" onclick="switchNav('record')">
+      <span class="bnav-icon">🎙️</span>
+      <span class="bnav-label">録音</span>
+    </div>
+    <div class="bnav-item" id="bnav-process" onclick="switchNav('process')">
+      <span class="bnav-icon">✨</span>
+      <span class="bnav-label">処理</span>
+    </div>
+    <div class="bnav-item" id="bnav-eval" onclick="switchNav('eval')">
+      <span class="bnav-icon">📊</span>
+      <span class="bnav-label">評価</span>
+    </div>
+    <div class="bnav-item" id="bnav-history" onclick="switchNav('history')">
+      <span class="bnav-icon">📁</span>
+      <span class="bnav-label">履歴</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// Waveform
+const canvas = document.getElementById('waveCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = canvas.offsetWidth * 2;
+canvas.height = 200;
+let points = [];
+let frame = 0;
+let isRecording = false;
+let timerInterval = null;
+let seconds = 0;
+
+function drawWave() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const w = canvas.width, h = canvas.height, mid = h / 2;
+
+  if (!isRecording) {
+    // idle flat line
+    ctx.beginPath();
+    ctx.moveTo(0, mid);
+    ctx.lineTo(w, mid);
+    ctx.strokeStyle = 'rgba(0,229,255,0.2)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    requestAnimationFrame(drawWave);
+    return;
+  }
+
+  // Generate animated wave
+  if (points.length > 80) points.shift();
+  const rand = (Math.random() - 0.5) * 80 + Math.sin(frame * 0.1) * 20;
+  points.push(rand);
+  frame++;
+
+  // Gradient
+  const grad = ctx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, 'rgba(0,229,255,0)');
+  grad.addColorStop(0.5, 'rgba(0,229,255,0.8)');
+  grad.addColorStop(1, 'rgba(0,229,255,0)');
+
+  ctx.beginPath();
+  ctx.moveTo(0, mid);
+  points.forEach((p, i) => {
+    const x = (i / 80) * w;
+    ctx.lineTo(x, mid + p);
+  });
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Fill
+  ctx.lineTo(w, mid);
+  ctx.lineTo(0, mid);
+  const fillGrad = ctx.createLinearGradient(0, 0, 0, h);
+  fillGrad.addColorStop(0, 'rgba(0,229,255,0.08)');
+  fillGrad.addColorStop(1, 'rgba(0,229,255,0)');
+  ctx.fillStyle = fillGrad;
+  ctx.fill();
+
+  requestAnimationFrame(drawWave);
+}
+drawWave();
+
+let noiseSimInterval = null;
+function toggleRecord() {
+  isRecording = !isRecording;
+  const btn = document.getElementById('recordBtn');
+  const ring = document.getElementById('recordRing');
+  const status = document.getElementById('recordStatus');
+  const icon = document.getElementById('recordIcon');
+  const processBtn = document.getElementById('toProcessBtn');
+
+  if (isRecording) {
+    btn.classList.add('recording');
+    ring.classList.add('recording');
+    status.textContent = '● REC';
+    status.classList.add('recording');
+    icon.textContent = '⏹️';
+
+    // Timer
+    timerInterval = setInterval(() => {
+      seconds++;
+      const m = String(Math.floor(seconds/60)).padStart(2,'0');
+      const s = String(seconds%60).padStart(2,'0');
+      document.getElementById('timerDisplay').textContent = `${m}:${s}`;
+    }, 1000);
+
+    // Noise simulation
+    noiseSimInterval = setInterval(() => {
+      const r = Math.random();
+      const lipBadge = document.getElementById('badge-lip');
+      if (r < 0.15) {
+        lipBadge.className = 'noise-badge active-detect';
+        lipBadge.querySelector('.label').textContent = '検出中!';
+        setTimeout(() => {
+          lipBadge.className = 'noise-badge';
+          lipBadge.querySelector('.label').textContent = 'クリーン';
+        }, 800);
+      }
+    }, 2000);
+  } else {
+    btn.classList.remove('recording');
+    ring.classList.remove('recording');
+    status.textContent = '録音完了 ✓';
+    status.classList.remove('recording');
+    status.style.color = 'var(--green)';
+    icon.textContent = '🎙️';
+    clearInterval(timerInterval);
+    clearInterval(noiseSimInterval);
+    processBtn.style.display = 'block';
+  }
+}
+
+function goToProcess() {
+  switchNav('process');
+  runProcessSimulation();
+}
+
+function runProcessSimulation() {
+  const steps = [
+    { id:'ps1', label:'ノイズ除去中…', desc:'リップノイズを検出して除去しています', emoji:'🔇', delay:1200 },
+    { id:'ps2', label:'AIフィルタリング…', desc:'DeepFilterNetでバックグラウンドノイズを除去', emoji:'🌊', delay:1500 },
+    { id:'ps3', label:'ダイナミクス処理…', desc:'音量を整えています', emoji:'📊', delay:1200 },
+    { id:'ps4', label:'EQ調整中…', desc:'聞き心地を最適化しています', emoji:'🎚️', delay:1000 },
+    { id:'ps5', label:'アクセント解析…', desc:'日本語アクセントを評価しています', emoji:'🎯', delay:1500 },
+  ];
+
+  let i = 0;
+  function next() {
+    if (i > 0) {
+      document.getElementById(steps[i-1].id).textContent = '完了';
+      document.getElementById(steps[i-1].id).className = 'process-status done';
+    }
+    if (i >= steps.length) {
+      document.getElementById('processTitle').textContent = '処理完了！';
+      document.getElementById('processDesc').textContent = 'すべての処理が完了しました';
+      document.getElementById('processEmoji').textContent = '✅';
+      document.getElementById('compareSection').style.display = 'block';
+      return;
+    }
+    const s = steps[i];
+    document.getElementById(s.id).textContent = '処理中';
+    document.getElementById(s.id).className = 'process-status running';
+    document.getElementById('processTitle').textContent = s.label;
+    document.getElementById('processDesc').textContent = s.desc;
+    document.getElementById('processEmoji').textContent = s.emoji;
+    i++;
+    setTimeout(next, s.delay);
+  }
+  next();
+}
+
+function goToEval() { switchNav('eval'); }
+function goToExport() {
+  document.getElementById('exportOverlay').style.display = 'flex';
+}
+
+function switchNav(tab) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.bnav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-'+tab).classList.add('active');
+  document.getElementById('bnav-'+tab).classList.add('active');
+}
+</script>
+</body>
+</html>
