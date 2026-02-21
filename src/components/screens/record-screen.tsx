@@ -161,7 +161,7 @@ export function RecordScreen({ onStartProcess }: RecordScreenProps) {
   return (
     <div className="animate-fade-in">
       <SectionTitle>読み上げテキスト</SectionTitle>
-      <div className="relative bg-bg2 border border-border rounded-2xl p-5 mb-6 leading-[1.9] text-[15px] font-light text-text-mid">
+      <div className="relative bg-bg2 border border-border rounded-2xl p-6 mb-7 leading-[2] text-[15px] font-light text-text-mid">
         <span className="absolute -top-2.5 left-3 bg-bg px-2 font-mono text-[10px] text-cyan tracking-[0.1em] uppercase">
           Script
         </span>
@@ -175,7 +175,7 @@ export function RecordScreen({ onStartProcess }: RecordScreenProps) {
 
       {/* Waveform or import area */}
       {mode === "imported" ? (
-        <div className="w-full h-[100px] rounded-2xl bg-bg2 border border-border flex flex-col items-center justify-center gap-2">
+        <div className="w-full h-[110px] rounded-2xl bg-bg2 border border-border flex flex-col items-center justify-center gap-2.5">
           <FileAudio size={24} className="text-cyan" />
           <div className="font-mono text-[12px] text-text-mid truncate max-w-[80%] text-center">
             {importedName}
@@ -192,14 +192,14 @@ export function RecordScreen({ onStartProcess }: RecordScreenProps) {
 
       {/* Timer (recording mode) */}
       {mode !== "imported" && (
-        <div className="font-display text-4xl font-bold text-center tracking-[0.05em] mt-5 mb-3">
+        <div className="font-display text-4xl font-bold text-center tracking-[0.05em] mt-6 mb-4">
           <span className="text-cyan">{formatted}</span>
         </div>
       )}
 
       {/* Record button */}
       {mode !== "imported" && (
-        <div className="flex flex-col items-center mt-6 mb-4 gap-5">
+        <div className="flex flex-col items-center mt-6 mb-6 gap-5">
           <div
             className={`w-[120px] h-[120px] rounded-full border-2 flex items-center justify-center relative cursor-pointer transition-all ${
               isRecording
@@ -242,7 +242,7 @@ export function RecordScreen({ onStartProcess }: RecordScreenProps) {
 
       {/* Real-time noise indicators - visible during recording */}
       {isRecording && (
-        <div className="flex gap-2 mb-4 animate-fade-in">
+        <div className="flex gap-2.5 mb-5 animate-fade-in">
           {([
             { icon: Activity, label: "リップノイズ", status: monitor.spikeStatus },
             { icon: Waves, label: "背景ノイズ", status: monitor.bgNoiseStatus },
@@ -250,7 +250,7 @@ export function RecordScreen({ onStartProcess }: RecordScreenProps) {
           ] as { icon: typeof Activity; label: string; status: NoiseStatus }[]).map((badge) => (
             <div
               key={badge.label}
-              className="flex-1 py-2.5 px-2 rounded-xl bg-bg2 border border-border font-mono text-[11px] text-center flex flex-col gap-1.5 items-center"
+              className="flex-1 py-3 px-3 rounded-xl bg-bg2 border border-border font-mono text-[11px] text-center flex flex-col gap-2 items-center"
             >
               <div
                 className={`w-2 h-2 rounded-full ${
@@ -276,7 +276,7 @@ export function RecordScreen({ onStartProcess }: RecordScreenProps) {
 
       {/* Level meter during recording */}
       {isRecording && (
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-3 mb-5">
           <span className="font-mono text-[9px] text-text-dim w-8 text-right">
             {Math.round(monitor.levelDb)}dB
           </span>
@@ -302,7 +302,7 @@ export function RecordScreen({ onStartProcess }: RecordScreenProps) {
       {/* File import drop zone */}
       {mode === "idle" && !isRecording && (
         <>
-          <div className="flex items-center gap-3 my-5">
+          <div className="flex items-center gap-3 my-7">
             <span className="flex-1 h-px bg-border" />
             <span className="font-mono text-[10px] text-text-dim uppercase tracking-[0.15em]">
               or
@@ -311,7 +311,7 @@ export function RecordScreen({ onStartProcess }: RecordScreenProps) {
           </div>
 
           <div
-            className={`rounded-2xl border-2 border-dashed p-6 text-center cursor-pointer transition-all ${
+            className={`rounded-2xl border-2 border-dashed p-7 text-center cursor-pointer transition-all ${
               isDragOver
                 ? "border-cyan/50 bg-cyan/5"
                 : "border-border hover:border-cyan/30"
@@ -321,8 +321,8 @@ export function RecordScreen({ onStartProcess }: RecordScreenProps) {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
           >
-            <Upload size={24} className="mx-auto mb-3 text-text-dim" />
-            <div className="text-[13px] text-text-mid mb-1">
+            <Upload size={24} className="mx-auto mb-4 text-text-dim" />
+            <div className="text-[13px] text-text-mid mb-2">
               音声ファイルをドロップ、またはタップして選択
             </div>
             <div className="font-mono text-[10px] text-text-dim">
@@ -347,7 +347,7 @@ export function RecordScreen({ onStartProcess }: RecordScreenProps) {
 
       {/* Action buttons */}
       {(mode === "recorded" || mode === "imported") && (
-        <div className="flex flex-col gap-3 mt-6 animate-fade-in">
+        <div className="flex flex-col gap-3.5 mt-8 animate-fade-in">
           <BigButton
             icon={Sparkles}
             onClick={handleStartProcess}

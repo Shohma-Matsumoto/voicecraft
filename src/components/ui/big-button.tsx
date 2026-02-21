@@ -18,7 +18,7 @@ export function BigButton({
   className = "",
 }: BigButtonProps) {
   const base =
-    "w-full py-3.5 rounded-xl font-sans text-[15px] font-bold cursor-pointer transition-all active:scale-[0.98] tracking-[0.05em] flex items-center justify-center gap-2";
+    "w-full py-4 rounded-2xl font-sans text-[15px] font-bold cursor-pointer transition-all active:scale-[0.98] tracking-[0.05em] flex items-center justify-center gap-2.5";
 
   const variants = {
     primary:

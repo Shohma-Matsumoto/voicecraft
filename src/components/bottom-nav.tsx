@@ -18,7 +18,7 @@ const tabs: { id: TabId; label: string; icon: typeof Mic }[] = [
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   return (
     <nav className="fixed bottom-0 w-full max-w-[390px] bg-bg/90 backdrop-blur-2xl border-t border-border z-50">
-      <div className="flex py-2 pb-7">
+      <div className="flex py-3 pb-8">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -34,7 +34,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                 strokeWidth={isActive ? 2 : 1.5}
               />
               <span
-                className={`font-mono text-[9px] uppercase tracking-[0.1em] transition-colors ${isActive ? "text-cyan" : "text-text-dim"}`}
+                className={`font-mono text-[10px] uppercase tracking-[0.1em] transition-colors ${isActive ? "text-cyan" : "text-text-dim"}`}
               >
                 {tab.label}
               </span>

@@ -69,6 +69,11 @@ export function ProcessScreen({
   const [playingAfter, setPlayingAfter] = useState(false);
   const stopRef = useRef<{ stop: () => void } | null>(null);
 
+  // Use refs to break dependency chains and prevent timer resets
+  const onProcessCompleteRef = useRef(onProcessComplete);
+  onProcessCompleteRef.current = onProcessComplete;
+  const hasStartedRef = useRef(false);
+
   const stepIndexMap: Record<StepId, number> = {
     "noise-gate": 0,
     highpass: 1,
@@ -78,7 +83,8 @@ export function ProcessScreen({
   };
 
   const runProcessing = useCallback(async () => {
-    if (hasStarted || !originalBuffer || !originalBlob) return;
+    if (hasStartedRef.current || !originalBuffer || !originalBlob) return;
+    hasStartedRef.current = true;
     setHasStarted(true);
     setStatuses(STEPS.map(() => "wait"));
     setCurrentStep(0);
@@ -114,14 +120,14 @@ export function ProcessScreen({
       const analysis = await analyzeAudio(processedWavBlob, processingResult.processedBuffer);
 
       setIsComplete(true);
-      onProcessComplete(processingResult, analysis);
+      onProcessCompleteRef.current(processingResult, analysis);
     } catch (err) {
       console.error("Processing failed:", err);
       setStatuses(STEPS.map(() => "done"));
       setIsComplete(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasStarted, originalBuffer, originalBlob, onProcessComplete]);
+  }, [originalBuffer, originalBlob]);
 
   useEffect(() => {
     if (isActive && !hasStarted && originalBuffer) {
@@ -179,8 +185,8 @@ export function ProcessScreen({
     <div className="animate-fade-in">
       <SectionTitle className="mt-2">AI音声処理</SectionTitle>
 
-      <div className="text-center py-8">
-        <div className="mb-4">
+      <div className="text-center py-10">
+        <div className="mb-5">
           {isComplete ? (
             <CheckCircle2
               size={48}
@@ -202,7 +208,7 @@ export function ProcessScreen({
               ? processingLabels[currentInfo.id].label
               : "準備中..."}
         </div>
-        <div className="text-[13px] text-text-dim mt-2">
+        <div className="text-[13px] text-text-dim mt-3">
           {isComplete
             ? "すべての処理が完了しました"
             : currentInfo
@@ -211,17 +217,17 @@ export function ProcessScreen({
         </div>
       </div>
 
-      <div className="bg-bg2 border border-border rounded-2xl p-5 mb-4">
+      <div className="bg-bg2 border border-border rounded-2xl p-5 mb-6">
         {STEPS.map((step, i) => {
           const Icon = stepIcons[i];
           const status = statuses[i];
           return (
             <div
               key={step.id}
-              className={`flex items-center gap-3 py-2.5 ${i < STEPS.length - 1 ? "border-b border-white/[0.04]" : ""}`}
+              className={`flex items-center gap-3.5 py-3.5 ${i < STEPS.length - 1 ? "border-b border-white/[0.04]" : ""}`}
             >
               <div
-                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${stepIconColors[i]}`}
+                className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${stepIconColors[i]}`}
               >
                 <Icon
                   size={16}
@@ -270,13 +276,13 @@ export function ProcessScreen({
 
       {isComplete && result && (
         <div className="animate-fade-in">
-          <div className="glow-line my-7" />
+          <div className="glow-line my-8" />
           <SectionTitle>Before / After 比較</SectionTitle>
 
-          <div className="rounded-2xl border border-border bg-bg2 p-5 mb-5">
-            <div className="flex gap-3 mb-5">
+          <div className="rounded-2xl border border-border bg-bg2 p-6 mb-6">
+            <div className="flex gap-3 mb-6">
               <button
-                className={`flex-1 flex items-center justify-center gap-2 border py-3 rounded-xl font-mono text-[12px] tracking-[0.08em] uppercase cursor-pointer transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-2.5 border py-3.5 rounded-xl font-mono text-[12px] tracking-[0.08em] uppercase cursor-pointer transition-colors ${
                   playingBefore
                     ? "bg-amber/30 border-amber/50 text-amber"
                     : "bg-amber-dim border-amber/30 text-amber hover:bg-amber/20"
@@ -287,7 +293,7 @@ export function ProcessScreen({
                 Before
               </button>
               <button
-                className={`flex-1 flex items-center justify-center gap-2 border py-3 rounded-xl font-mono text-[12px] tracking-[0.08em] uppercase cursor-pointer transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-2.5 border py-3.5 rounded-xl font-mono text-[12px] tracking-[0.08em] uppercase cursor-pointer transition-colors ${
                   playingAfter
                     ? "bg-cyan/30 border-cyan/50 text-cyan"
                     : "bg-cyan-dim border-cyan/30 text-cyan hover:bg-cyan/20"
@@ -299,7 +305,7 @@ export function ProcessScreen({
             </div>
 
             {/* Real waveform comparison */}
-            <div className="flex gap-3 mb-5">
+            <div className="flex gap-4 mb-6">
               <div className="flex-1 flex flex-col items-center gap-1">
                 <svg width="100%" height="48" viewBox="0 0 140 48" className="opacity-80">
                   <path

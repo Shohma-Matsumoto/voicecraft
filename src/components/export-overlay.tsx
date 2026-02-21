@@ -83,7 +83,7 @@ export function ExportOverlay({
 
   return (
     <div className="absolute inset-0 bg-bg/95 z-[200] flex flex-col animate-slide-up">
-      <div className="flex items-center justify-between px-6 pt-8 pb-6">
+      <div className="flex items-center justify-between px-6 pt-10 pb-7">
         <h2 className="font-display text-lg font-bold text-text">
           エクスポート
         </h2>
@@ -97,11 +97,11 @@ export function ExportOverlay({
 
       <div className="px-6 flex-1">
         <SectionTitle>フォーマット</SectionTitle>
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2.5 mb-7">
           {formats.map((fmt, i) => (
             <button
               key={fmt.value}
-              className={`flex-1 py-3 rounded-xl border font-mono text-[12px] tracking-[0.08em] uppercase cursor-pointer transition-all flex flex-col items-center gap-1.5 ${
+              className={`flex-1 py-3.5 rounded-xl border font-mono text-[12px] tracking-[0.08em] uppercase cursor-pointer transition-all flex flex-col items-center gap-2 ${
                 selectedFormat === i
                   ? "bg-cyan-dim border-cyan/30 text-cyan"
                   : "bg-bg2 border-border text-text-dim hover:border-white/10"
@@ -115,11 +115,11 @@ export function ExportOverlay({
         </div>
 
         <SectionTitle>品質</SectionTitle>
-        <div className="flex flex-col gap-2 mb-8">
+        <div className="flex flex-col gap-2.5 mb-8">
           {qualities.map((q, i) => (
             <button
               key={q.value}
-              className={`w-full py-3 px-4 rounded-xl border font-mono text-[13px] cursor-pointer transition-all flex items-center justify-between ${
+              className={`w-full py-3.5 px-5 rounded-xl border font-mono text-[13px] cursor-pointer transition-all flex items-center justify-between ${
                 selectedQuality === i
                   ? i === 0
                     ? "bg-amber-dim border-amber/30 text-amber"
@@ -135,7 +135,7 @@ export function ExportOverlay({
         </div>
 
         {/* File info */}
-        <div className="text-center text-[12px] text-text-dim mb-6 font-mono">
+        <div className="text-center text-[12px] text-text-dim mb-7 font-mono">
           推定ファイルサイズ: <span className="text-cyan">{fileSizeLabel}</span>
           {processedBuffer && (
             <>
@@ -162,7 +162,7 @@ export function ExportOverlay({
               ? "ダウンロード完了!"
               : "ダウンロード"}
         </BigButton>
-        <div className="mt-3">
+        <div className="mt-3.5">
           <BigButton icon={Share2} variant="secondary" onClick={onClose}>
             閉じる
           </BigButton>

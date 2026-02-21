@@ -76,20 +76,20 @@ export function HistoryScreen({
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3.5">
         {dynamicHistory.map((item) => {
           const isHighScore = item.score >= 80;
           return (
             <div
               key={item.id}
-              className="bg-bg2 border border-border rounded-2xl p-4 flex gap-3.5 items-center cursor-pointer transition-all hover:border-cyan/30 active:scale-[0.99]"
+              className="bg-bg2 border border-border rounded-2xl p-5 flex gap-4 items-center cursor-pointer transition-all hover:border-cyan/30 active:scale-[0.99]"
               onClick={onSelectItem}
             >
-              <div className="w-12 h-12 rounded-xl bg-bg3 border border-border flex items-center justify-center shrink-0">
+              <div className="w-13 h-13 rounded-xl bg-bg3 border border-border flex items-center justify-center shrink-0">
                 <AudioLines size={22} className="text-text-mid" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm mb-1.5 truncate">
+                <div className="font-medium text-sm mb-2 truncate">
                   {item.title}
                 </div>
                 <div className="font-mono text-[10px] text-text-dim tracking-[0.05em]">
@@ -97,7 +97,7 @@ export function HistoryScreen({
                 </div>
               </div>
               <div
-                className={`px-3 py-1.5 rounded-full font-mono text-[13px] font-bold border ${
+                className={`px-3.5 py-2 rounded-full font-mono text-[13px] font-bold border ${
                   isHighScore
                     ? "bg-green-dim text-green border-green/20"
                     : "bg-cyan-dim text-cyan border-cyan/20"
@@ -113,10 +113,10 @@ export function HistoryScreen({
       {/* Score trend chart - shown when there are 2+ items */}
       {chartSvg && chartData.length >= 2 && (
         <>
-          <div className="glow-line my-6" />
+          <div className="glow-line my-8" />
           <SectionTitle>スコア推移</SectionTitle>
 
-          <div className="bg-bg2 border border-border rounded-2xl p-4">
+          <div className="bg-bg2 border border-border rounded-2xl p-5">
             <svg
               width="100%"
               height="80"
@@ -181,7 +181,7 @@ export function HistoryScreen({
               ))}
             </div>
             {/* Trend indicator */}
-            <div className="text-center text-[12px] text-text-dim mt-3 flex items-center justify-center gap-1.5">
+            <div className="text-center text-[12px] text-text-dim mt-4 flex items-center justify-center gap-2">
               {trend > 0 ? (
                 <>
                   <TrendingUp size={14} className="text-green" />

@@ -14,7 +14,7 @@ export function Chip({
   onClick,
 }: ChipProps) {
   const baseClasses =
-    "inline-block px-2.5 py-0.5 rounded-full font-mono text-[10px] tracking-[0.08em] uppercase border transition-all";
+    "inline-block px-3 py-1 rounded-full font-mono text-[10px] tracking-[0.08em] uppercase border transition-all";
 
   const variantClasses =
     variant === "amber"

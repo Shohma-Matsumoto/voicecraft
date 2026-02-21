@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { AppHeader } from "@/components/app-header";
 import { BottomNav } from "@/components/bottom-nav";
 import { ExportOverlay } from "@/components/export-overlay";
@@ -24,8 +24,10 @@ export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [processStarted, setProcessStarted] = useState(false);
 
-  // Persisted history
-  const history = useHistory();
+  // Persisted history — destructure to get stable references
+  const { items: historyItems, addItem: addHistoryItem } = useHistory();
+  const historyCountRef = useRef(0);
+  historyCountRef.current = historyItems.length;
 
   const handleStartProcess = useCallback(
     (buffer: AudioBuffer, blob: Blob) => {
@@ -50,14 +52,14 @@ export default function Home() {
       const dur = result.processedBuffer.duration;
       const durStr = `${String(Math.floor(dur / 60)).padStart(2, "0")}:${String(Math.round(dur % 60)).padStart(2, "0")}`;
 
-      history.addItem({
-        title: `録音 ${history.items.length + 1}`,
+      addHistoryItem({
+        title: `録音 ${historyCountRef.current + 1}`,
         date: dateStr,
         duration: durStr,
         score: analysis.overallScore,
       });
     },
-    [history],
+    [addHistoryItem],
   );
 
   const handleGoToEval = useCallback(() => {
@@ -89,7 +91,7 @@ export default function Home() {
         <AppHeader />
 
         {/* Screens */}
-        <div className="px-5 pb-28">
+        <div className="px-6 pb-32">
           {activeTab === "record" && (
             <RecordScreen onStartProcess={handleStartProcess} />
           )}
@@ -110,7 +112,7 @@ export default function Home() {
           )}
           {activeTab === "history" && (
             <HistoryScreen
-              dynamicHistory={history.items}
+              dynamicHistory={historyItems}
               onSelectItem={handleSelectHistoryItem}
             />
           )}

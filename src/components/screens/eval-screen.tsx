@@ -22,7 +22,7 @@ export function EvalScreen({ analysisResult, onExport }: EvalScreenProps) {
     return (
       <div className="animate-fade-in">
         <SectionTitle className="mt-2">アクセント評価</SectionTitle>
-        <div className="text-center py-16 text-text-dim text-sm">
+        <div className="text-center py-20 text-text-dim text-sm">
           録音を処理すると、ここに評価結果が表示されます
         </div>
       </div>
@@ -37,8 +37,8 @@ export function EvalScreen({ analysisResult, onExport }: EvalScreenProps) {
     { name: "明瞭度", value: metrics.clarity, color: "cyan" as const },
   ];
 
-  // SVG score ring: circumference = 2*PI*56 ≈ 352
-  const circumference = 352;
+  // SVG score ring: circumference = 2*PI*64 ≈ 402
+  const circumference = 402;
   const dashOffset = circumference - (circumference * score) / 100;
 
   return (
@@ -46,26 +46,26 @@ export function EvalScreen({ analysisResult, onExport }: EvalScreenProps) {
       <SectionTitle className="mt-2">アクセント評価</SectionTitle>
 
       {/* Score ring */}
-      <div className="flex flex-col items-center mt-8 mb-10">
-        <div className="w-[140px] h-[140px] relative">
+      <div className="flex flex-col items-center mt-10 mb-12">
+        <div className="w-[160px] h-[160px] relative">
           <svg
-            width="140"
-            height="140"
-            viewBox="0 0 140 140"
+            width="160"
+            height="160"
+            viewBox="0 0 160 160"
             className="-rotate-90"
           >
             <circle
-              cx="70"
-              cy="70"
-              r="56"
+              cx="80"
+              cy="80"
+              r="64"
               fill="none"
               stroke="rgba(255,255,255,0.06)"
               strokeWidth="8"
             />
             <circle
-              cx="70"
-              cy="70"
-              r="56"
+              cx="80"
+              cy="80"
+              r="64"
               fill="none"
               stroke="url(#scoreGrad)"
               strokeWidth="8"
@@ -94,7 +94,7 @@ export function EvalScreen({ analysisResult, onExport }: EvalScreenProps) {
             <span className="text-[12px] text-text-dim mt-1">/ 100</span>
           </div>
         </div>
-        <div className="mt-4 text-center flex items-center gap-2.5">
+        <div className="mt-5 text-center flex items-center gap-3">
           <Chip>{label}</Chip>
           {improvementCount > 0 && (
             <span className="font-mono text-[11px] text-text-dim">
@@ -108,7 +108,7 @@ export function EvalScreen({ analysisResult, onExport }: EvalScreenProps) {
       {evalItems.length > 0 && (
         <>
           <SectionTitle>指摘箇所</SectionTitle>
-          <div className="flex flex-col gap-3 mb-2">
+          <div className="flex flex-col gap-3.5 mb-4">
             {evalItems.map((item, i) => {
               const StatusIcon =
                 item.status === "correct"
@@ -128,7 +128,7 @@ export function EvalScreen({ analysisResult, onExport }: EvalScreenProps) {
               return (
                 <div
                   key={item.word + i}
-                  className="bg-bg2 border border-border rounded-2xl p-4 flex gap-3.5 items-start animate-fade-in"
+                  className="bg-bg2 border border-border rounded-2xl p-5 flex gap-4 items-start animate-fade-in"
                   style={{ animationDelay: `${i * 100}ms` }}
                 >
                   <StatusIcon
@@ -137,7 +137,7 @@ export function EvalScreen({ analysisResult, onExport }: EvalScreenProps) {
                     strokeWidth={2}
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-[15px] mb-1.5">
+                    <div className="font-bold text-[15px] mb-2">
                       「{item.word}」
                       <span
                         className={`text-[11px] font-mono ${noteColor} font-normal ml-2`}
@@ -149,7 +149,7 @@ export function EvalScreen({ analysisResult, onExport }: EvalScreenProps) {
                       {item.description}
                     </div>
                     {item.tip && (
-                      <div className="mt-2.5 p-2.5 bg-amber-dim rounded-lg text-[11px] text-amber leading-relaxed flex gap-2 items-start">
+                      <div className="mt-3 p-3 bg-amber-dim rounded-lg text-[11px] text-amber leading-relaxed flex gap-2.5 items-start">
                         <Lightbulb size={12} className="mt-0.5 shrink-0" />
                         <span>{item.tip}</span>
                       </div>
@@ -163,16 +163,16 @@ export function EvalScreen({ analysisResult, onExport }: EvalScreenProps) {
       )}
 
       {/* Detailed scores */}
-      <div className="glow-line my-7" />
+      <div className="glow-line my-8" />
       <SectionTitle>詳細スコア</SectionTitle>
 
-      <div className="flex flex-col gap-3.5 mt-5">
+      <div className="flex flex-col gap-4 mt-5">
         {metricsList.map((metric) => (
           <div key={metric.name} className="flex items-center gap-3">
             <div className="font-mono text-[10px] uppercase tracking-[0.05em] text-text-dim w-[72px] shrink-0 text-right">
               {metric.name}
             </div>
-            <div className="flex-1 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+            <div className="flex-1 h-2 bg-white/[0.06] rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full animate-progress-fill ${
                   metric.color === "green"
@@ -199,7 +199,7 @@ export function EvalScreen({ analysisResult, onExport }: EvalScreenProps) {
         ))}
       </div>
 
-      <div className="mt-8">
+      <div className="mt-10 mb-4">
         <BigButton icon={Download} onClick={onExport}>
           エクスポート
         </BigButton>
