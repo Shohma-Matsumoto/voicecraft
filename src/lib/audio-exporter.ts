@@ -112,7 +112,7 @@ function getSupportedMimeType(): string {
   return "audio/webm";
 }
 
-export type ExportFormat = "wav" | "mp3" | "m4a";
+export type ExportFormat = "wav" | "webm";
 export type ExportQuality = "low" | "standard" | "high";
 
 /** Estimate file size in KB. */
@@ -130,11 +130,11 @@ export function estimateFileSize(
     return Math.round((sampleRate * channels * 2 * durationSec) / 1024);
   }
 
-  // Compressed formats — estimate by bitrate
+  // WebM Opus — estimate by bitrate
   const bitrates: Record<ExportQuality, number> = {
-    low: 128,
-    standard: 256,
-    high: 320,
+    low: 64,
+    standard: 128,
+    high: 192,
   };
   const kbps = bitrates[quality];
   return Math.round((kbps * durationSec) / 8);
@@ -145,9 +145,7 @@ export function getExtension(format: ExportFormat): string {
   switch (format) {
     case "wav":
       return "wav";
-    case "mp3":
-      return "webm"; // We encode as WebM since no MP3 encoder in browser
-    case "m4a":
+    case "webm":
       return "webm";
   }
 }
@@ -178,7 +176,6 @@ export async function exportAudio(
     blob = audioBufferToWav(buffer);
     ext = "wav";
   } else {
-    // MP3 and M4A are exported as WebM (browser-native encoding)
     blob = await audioBufferToWebm(buffer);
     ext = "webm";
   }

@@ -23,7 +23,6 @@ import {
   type StepId,
 } from "@/lib/audio-processor";
 import { analyzeAudio, type AnalysisResult } from "@/lib/audio-analyzer";
-import { audioBufferToWav } from "@/lib/audio-exporter";
 import { getWaveformPeaks, peaksToSvgPath } from "@/lib/waveform-data";
 
 interface ProcessScreenProps {
@@ -64,6 +63,7 @@ export function ProcessScreen({
   const [currentStep, setCurrentStep] = useState(-1);
   const [isComplete, setIsComplete] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<ProcessingResult | null>(null);
   const [playingBefore, setPlayingBefore] = useState(false);
   const [playingAfter, setPlayingAfter] = useState(false);
@@ -116,8 +116,9 @@ export function ProcessScreen({
       setResult(processingResult);
 
       // Run accent analysis
-      const processedWavBlob = audioBufferToWav(processingResult.processedBuffer);
-      const analysis = await analyzeAudio(processedWavBlob, processingResult.processedBuffer);
+      setIsAnalyzing(true);
+      const analysis = await analyzeAudio(processingResult.processedBuffer);
+      setIsAnalyzing(false);
 
       setIsComplete(true);
       onProcessCompleteRef.current(processingResult, analysis);
@@ -204,16 +205,20 @@ export function ProcessScreen({
         <div className="font-display text-lg text-cyan">
           {isComplete
             ? "処理完了!"
-            : currentInfo
-              ? processingLabels[currentInfo.id].label
-              : "準備中..."}
+            : isAnalyzing
+              ? "アクセント解析中..."
+              : currentInfo
+                ? processingLabels[currentInfo.id].label
+                : "準備中..."}
         </div>
         <div className="text-[13px] text-text-dim mt-3">
           {isComplete
             ? "すべての処理が完了しました"
-            : currentInfo
-              ? processingLabels[currentInfo.id].desc
-              : ""}
+            : isAnalyzing
+              ? "ピッチ検出とアクセントパターンを分析しています"
+              : currentInfo
+                ? processingLabels[currentInfo.id].desc
+                : ""}
         </div>
       </div>
 

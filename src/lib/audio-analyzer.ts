@@ -1,7 +1,11 @@
 /**
- * Client-side speech analysis using Web Speech API + audio feature extraction.
- * Provides accent evaluation, speech rate, and clarity metrics.
- * No server required — runs entirely in the browser.
+ * Client-side speech analysis using YIN pitch tracking + audio features.
+ * Measures real acoustic properties: F0 contour, energy, pitch patterns.
+ * No server or API keys required — runs entirely in the browser.
+ *
+ * Pitch detection uses the YIN autocorrelation algorithm.
+ * Accent evaluation compares measured pitch patterns against
+ * standard Japanese accent dictionaries.
  */
 
 export interface EvalItem {
@@ -15,7 +19,7 @@ export interface EvalItem {
 export interface AnalysisResult {
   /** Overall score 0-100 */
   overallScore: number;
-  /** Transcript from speech recognition */
+  /** Reference text used for evaluation */
   transcript: string;
   /** Per-word accent evaluation */
   evalItems: EvalItem[];
@@ -26,7 +30,7 @@ export interface AnalysisResult {
     intonation: number;
     clarity: number;
   };
-  /** Words per minute */
+  /** Characters per minute */
   wpm: number;
   /** Number of improvement points */
   improvementCount: number;
@@ -38,227 +42,342 @@ export interface AnalysisResult {
 const EXPECTED_TEXT =
   "東京の春は雨と晴れが繰り返す季節です橋の上から桜を眺めると花びらが川面に舞い落ちていきます";
 
-/** Accent dictionary: word → { expected accent pattern, tips } */
+/** Total morae in EXPECTED_TEXT. */
+const TOTAL_MORAE = 58;
+
+/**
+ * Accent dictionary with real mora positions in the expected text.
+ * Mora positions counted from reading:
+ * と(0) う(1) きょ(2) う(3) の(4) は(5) る(6) は(7) あ(8) め(9)
+ * と(10) は(11) れ(12) が(13) く(14) り(15) か(16) え(17) す(18)
+ * き(19) せ(20) つ(21) で(22) す(23) は(24) し(25) の(26)
+ * う(27) え(28) か(29) ら(30) さ(31) く(32) ら(33) を(34)
+ * な(35) が(36) め(37) る(38) と(39) は(40) な(41) び(42) ら(43)
+ * が(44) か(45) わ(46) も(47) に(48) ま(49) い(50) お(51)
+ * ち(52) て(53) い(54) き(55) ま(56) す(57)
+ */
 const ACCENT_DICT: Record<
   string,
-  { pattern: string; wrongDesc: string; tip: string }
+  {
+    pattern: string;
+    moraCount: number;
+    moraStart: number;
+    wrongDesc: string;
+    tip: string;
+  }
 > = {
   東京: {
     pattern: "LHHL",
+    moraCount: 4,
+    moraStart: 0,
     wrongDesc: "アクセントが不自然です",
     tip: "「とう」を低く、「きょ」を高く、「う」で下げます",
   },
+  春: {
+    pattern: "LH",
+    moraCount: 2,
+    moraStart: 5,
+    wrongDesc: "アクセントが弱いです",
+    tip: "「は」を低く、「る」を高く発音しましょう",
+  },
   雨: {
     pattern: "LH",
+    moraCount: 2,
+    moraStart: 8,
     wrongDesc: "平板型になっています",
     tip: "「飴（あめ）」と区別するためにも、1音目を低く2音目を高く発音します",
   },
   橋: {
     pattern: "LH",
+    moraCount: 2,
+    moraStart: 24,
     wrongDesc: "アクセント不明確",
     tip: "橋＝最初の音を低く。箸＝最初の音を高く。で覚えましょう",
   },
-  春: {
-    pattern: "LH",
-    wrongDesc: "アクセントが弱いです",
-    tip: "「は」を低く、「る」を高く発音しましょう",
-  },
   桜: {
     pattern: "LHH",
+    moraCount: 3,
+    moraStart: 31,
     wrongDesc: "抑揚が足りません",
     tip: "「さ」を低く、「くら」を高く保ちましょう",
   },
 };
 
+// ────────────────────────────────────────────────
+// Pitch Detection — YIN autocorrelation algorithm
+// ────────────────────────────────────────────────
+
 /**
- * Run speech recognition on an audio Blob.
- * Uses the Web Speech API (SpeechRecognition).
- * Falls back to empty string if not supported.
+ * YIN pitch detection for a single audio frame.
+ * Returns fundamental frequency in Hz, or 0 if the frame is unvoiced.
+ *
+ * Reference: de Cheveigné & Kawahara (2002) "YIN, a fundamental
+ * frequency estimator for speech and music"
  */
-async function recognizeSpeech(blob: Blob): Promise<string> {
-  // The Web Speech API works with live microphone input, not blobs directly.
-  // We need to play the audio and let recognition capture it,
-  // OR use a workaround. Since SpeechRecognition can't take a blob,
-  // we'll simulate recognition by playing through an AudioContext
-  // and just using the blob's presence to estimate a transcript.
-  //
-  // For a true implementation you'd need a speech-to-text model (Whisper etc.)
-  // running client-side via WASM/ONNX. For now, we do a best-effort attempt
-  // with SpeechRecognition + fallback.
+function yinPitch(
+  frame: Float32Array,
+  sampleRate: number,
+  threshold: number = 0.15,
+): number {
+  const halfLen = Math.floor(frame.length / 2);
+  // Human voice F0 range: 80–500 Hz
+  const minPeriod = Math.floor(sampleRate / 500);
+  const maxPeriod = Math.min(halfLen - 1, Math.ceil(sampleRate / 80));
 
-  const SpeechRecognitionCtor =
-    typeof window !== "undefined"
-      ? window.SpeechRecognition || window.webkitSpeechRecognition
-      : null;
+  if (maxPeriod <= minPeriod) return 0;
 
-  if (!SpeechRecognitionCtor) {
-    return "";
+  // Step 1: Difference function
+  const diff = new Float32Array(maxPeriod + 1);
+  for (let tau = 1; tau <= maxPeriod; tau++) {
+    let sum = 0;
+    for (let i = 0; i < halfLen; i++) {
+      const d = frame[i] - frame[i + tau];
+      sum += d * d;
+    }
+    diff[tau] = sum;
   }
 
-  // Try to play the audio through speakers and capture with SpeechRecognition
-  // This is unreliable, so we also have a fallback path
-  try {
-    const arrayBuffer = await blob.arrayBuffer();
-    const ctx = new AudioContext();
-    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-
-    return new Promise<string>((resolve) => {
-      const recognition = new SpeechRecognitionCtor();
-      recognition.lang = "ja-JP";
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-
-      let result = "";
-      const timeout = setTimeout(() => {
-        recognition.stop();
-      }, (audioBuffer.duration + 3) * 1000);
-
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        for (let i = 0; i < event.results.length; i++) {
-          result += event.results[i][0].transcript;
-        }
-      };
-
-      recognition.onend = () => {
-        clearTimeout(timeout);
-        ctx.close();
-        resolve(result);
-      };
-
-      recognition.onerror = () => {
-        clearTimeout(timeout);
-        ctx.close();
-        resolve(result);
-      };
-
-      // Start recognition — it listens to the microphone,
-      // so this only works if the audio is played through speakers
-      // and picked up. For a production app, use Whisper WASM.
-      recognition.start();
-
-      // Play the audio
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(ctx.destination);
-      source.start();
-    });
-  } catch {
-    return "";
+  // Step 2: Cumulative mean normalized difference function (CMNDF)
+  const cmndf = new Float32Array(maxPeriod + 1);
+  cmndf[0] = 1;
+  let runningSum = 0;
+  for (let tau = 1; tau <= maxPeriod; tau++) {
+    runningSum += diff[tau];
+    cmndf[tau] = runningSum > 0 ? (diff[tau] * tau) / runningSum : 1;
   }
+
+  // Step 3: Absolute threshold — find first dip below threshold in voice range
+  let tauEstimate = -1;
+  for (let tau = minPeriod; tau <= maxPeriod; tau++) {
+    if (cmndf[tau] < threshold) {
+      // Walk to local minimum
+      while (tau + 1 <= maxPeriod && cmndf[tau + 1] < cmndf[tau]) {
+        tau++;
+      }
+      tauEstimate = tau;
+      break;
+    }
+  }
+
+  if (tauEstimate <= 0) return 0; // unvoiced
+
+  // Step 4: Parabolic interpolation for sub-sample accuracy
+  if (tauEstimate > 1 && tauEstimate < maxPeriod) {
+    const s0 = cmndf[tauEstimate - 1];
+    const s1 = cmndf[tauEstimate];
+    const s2 = cmndf[tauEstimate + 1];
+    const denom = 2 * (s0 - 2 * s1 + s2);
+    if (Math.abs(denom) > 1e-10) {
+      const betterTau = tauEstimate + (s0 - s2) / denom;
+      if (betterTau > 0) return sampleRate / betterTau;
+    }
+  }
+
+  return sampleRate / tauEstimate;
 }
 
 /**
- * Compute audio features from an AudioBuffer for scoring.
+ * Extract pitch contour from an AudioBuffer.
+ * Yields between batches to keep the UI responsive.
+ *
+ * @returns Array of F0 values (Hz) per frame. 0 = unvoiced.
  */
-function computeAudioFeatures(buffer: AudioBuffer): {
-  rmsDb: number;
-  zeroCrossingRate: number;
-  spectralFlatness: number;
-} {
+async function extractPitchContour(
+  buffer: AudioBuffer,
+  frameSize: number = 2048,
+  hopSize: number = 512,
+): Promise<{ pitches: number[]; hopDuration: number }> {
   const data = buffer.getChannelData(0);
-  const len = data.length;
-
-  // RMS
-  let sumSq = 0;
-  for (let i = 0; i < len; i++) sumSq += data[i] * data[i];
-  const rmsDb = 20 * Math.log10(Math.sqrt(sumSq / len) + 1e-10);
-
-  // Zero-crossing rate (correlates with pitch/clarity)
-  let crossings = 0;
-  for (let i = 1; i < len; i++) {
-    if ((data[i] >= 0 && data[i - 1] < 0) || (data[i] < 0 && data[i - 1] >= 0)) {
-      crossings++;
-    }
-  }
-  const zeroCrossingRate = crossings / len;
-
-  // Spectral flatness (quick estimate via ratio of geometric to arithmetic mean of |samples|)
-  let logSum = 0;
-  let absSum = 0;
+  const sampleRate = buffer.sampleRate;
+  const pitches: number[] = [];
+  const batchSize = 50;
   let count = 0;
-  for (let i = 0; i < len; i++) {
-    const v = Math.abs(data[i]);
-    if (v > 1e-10) {
-      logSum += Math.log(v);
-      absSum += v;
-      count++;
+
+  for (let start = 0; start + frameSize < data.length; start += hopSize) {
+    const frame = data.subarray(start, start + frameSize);
+    pitches.push(yinPitch(frame, sampleRate));
+
+    count++;
+    if (count % batchSize === 0) {
+      // Yield to keep UI/spinner alive
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
   }
-  const geoMean = count > 0 ? Math.exp(logSum / count) : 0;
-  const ariMean = count > 0 ? absSum / count : 0;
-  const spectralFlatness = ariMean > 0 ? geoMean / ariMean : 0;
 
-  return { rmsDb, zeroCrossingRate, spectralFlatness };
+  return { pitches, hopDuration: hopSize / sampleRate };
 }
+
+// ────────────────────────────────────────────────
+// Mora-level pitch analysis
+// ────────────────────────────────────────────────
+
+/**
+ * Estimate median pitch per mora by dividing the audio into
+ * equal-duration slots corresponding to the expected morae count.
+ */
+function getMedianPitchPerMora(
+  pitches: number[],
+  hopDuration: number,
+  audioDuration: number,
+  totalMorae: number,
+): number[] {
+  const moraDuration = audioDuration / totalMorae;
+  const moraPitches: number[] = [];
+
+  for (let m = 0; m < totalMorae; m++) {
+    const startTime = m * moraDuration;
+    const endTime = (m + 1) * moraDuration;
+    const startFrame = Math.floor(startTime / hopDuration);
+    const endFrame = Math.min(
+      Math.ceil(endTime / hopDuration),
+      pitches.length,
+    );
+
+    // Collect voiced pitches in this mora slot
+    const voiced: number[] = [];
+    for (let f = startFrame; f < endFrame; f++) {
+      if (pitches[f] > 0) {
+        voiced.push(pitches[f]);
+      }
+    }
+
+    if (voiced.length > 0) {
+      voiced.sort((a, b) => a - b);
+      moraPitches.push(voiced[Math.floor(voiced.length / 2)]); // median
+    } else {
+      moraPitches.push(0); // unvoiced
+    }
+  }
+
+  return moraPitches;
+}
+
+/**
+ * Convert an array of pitch values to an H/L pattern string.
+ * Uses the word-internal median as the boundary between High and Low.
+ * Unvoiced morae (0) are interpolated from neighbours when possible.
+ */
+function pitchesToPattern(pitches: number[]): string {
+  if (pitches.length === 0) return "";
+  if (pitches.length === 1) return pitches[0] > 0 ? "H" : "L";
+
+  // Interpolate unvoiced morae from neighbours
+  const interp = [...pitches];
+  for (let i = 0; i < interp.length; i++) {
+    if (interp[i] === 0) {
+      let prev = 0;
+      let next = 0;
+      for (let j = i - 1; j >= 0; j--) {
+        if (interp[j] > 0) {
+          prev = interp[j];
+          break;
+        }
+      }
+      for (let j = i + 1; j < interp.length; j++) {
+        if (interp[j] > 0) {
+          next = interp[j];
+          break;
+        }
+      }
+      interp[i] =
+        prev > 0 && next > 0 ? (prev + next) / 2 : prev || next;
+    }
+  }
+
+  const voiced = interp.filter((p) => p > 0);
+  if (voiced.length === 0) return pitches.map(() => "L").join("");
+
+  voiced.sort((a, b) => a - b);
+  const median = voiced[Math.floor(voiced.length / 2)];
+
+  return interp.map((p) => (p > 0 && p >= median ? "H" : "L")).join("");
+}
+
+/** Compare two same-length accent patterns. Returns 0–1 match ratio. */
+function comparePatterns(actual: string, expected: string): number {
+  if (actual.length !== expected.length) return 0;
+  let match = 0;
+  for (let i = 0; i < actual.length; i++) {
+    if (actual[i] === expected[i]) match++;
+  }
+  return match / actual.length;
+}
+
+// ────────────────────────────────────────────────
+// Main analysis entry point
+// ────────────────────────────────────────────────
 
 /**
  * Analyze the processed audio and produce an evaluation result.
+ * All measurements are derived from real acoustic features.
  */
 export async function analyzeAudio(
-  processedBlob: Blob,
   processedBuffer: AudioBuffer,
 ): Promise<AnalysisResult> {
-  // Attempt speech recognition
-  let transcript = await recognizeSpeech(processedBlob);
+  const duration = processedBuffer.duration;
 
-  // Compute audio features
-  const features = computeAudioFeatures(processedBuffer);
+  // 1. Extract pitch contour (YIN)
+  const { pitches, hopDuration } = await extractPitchContour(processedBuffer);
 
-  // If transcript is empty (recognition failed/unsupported), use expected text
-  // with simulated accuracy. In production, use Whisper WASM.
-  const useFallback = transcript.length < 5;
-  if (useFallback) {
-    transcript = EXPECTED_TEXT;
-  }
+  // 2. Estimate median pitch per mora
+  const moraPitches = getMedianPitchPerMora(
+    pitches,
+    hopDuration,
+    duration,
+    TOTAL_MORAE,
+  );
 
-  // Normalize transcript
-  const normalizedTranscript = transcript.replace(/[、。\s]/g, "");
-
-  // Calculate how much of the expected text was matched
-  const matchRatio = useFallback
-    ? 0.8 // fallback estimate when speech recognition is unavailable
-    : calculateMatchRatio(normalizedTranscript, EXPECTED_TEXT.replace(/[、。\s]/g, ""));
-
-  // Generate per-word evaluation
+  // 3. Per-word accent evaluation
   const evalItems: EvalItem[] = [];
   const accentWords = Object.keys(ACCENT_DICT);
+  const wordMatchRatios: number[] = [];
 
   for (const word of accentWords) {
     const dict = ACCENT_DICT[word];
-    const found = normalizedTranscript.includes(word);
+    const wordPitches = moraPitches.slice(
+      dict.moraStart,
+      dict.moraStart + dict.moraCount,
+    );
 
-    if (!found) continue;
+    const voicedCount = wordPitches.filter((p) => p > 0).length;
+    if (voicedCount < dict.moraCount * 0.5) {
+      // Not enough voiced data for reliable evaluation
+      evalItems.push({
+        word,
+        status: "warning",
+        pitchNote: "検出不足",
+        description: `「${word}」の発声が不明瞭です。はっきりと発音してみましょう。`,
+        tip: dict.tip,
+      });
+      wordMatchRatios.push(0.5); // neutral score for insufficient data
+      continue;
+    }
 
-    // Pseudo-random but deterministic evaluation per word based on features
-    const seed = hashCode(word);
-    const featureScore =
-      0.5 +
-      features.zeroCrossingRate * 10 +
-      (seed % 30) / 100 +
-      matchRatio * 0.3;
+    const actualPattern = pitchesToPattern(wordPitches);
+    const matchRatio = comparePatterns(actualPattern, dict.pattern);
+    wordMatchRatios.push(matchRatio);
 
-    if (featureScore > 0.85) {
+    if (matchRatio >= 0.75) {
       evalItems.push({
         word,
         status: "correct",
         pitchNote: `${dict.pattern} 正確`,
-        description: `${dict.pattern}の正しいアクセントパターンで発音できています。`,
+        description: `「${word}」は正しいアクセントパターン (${dict.pattern}) で発音できています。`,
       });
-    } else if (featureScore > 0.65) {
+    } else if (matchRatio >= 0.5) {
       evalItems.push({
         word,
         status: "warning",
-        pitchNote: dict.wrongDesc,
-        description: `「${word}」のアクセントパターンは${dict.pattern}が標準です。`,
+        pitchNote: `実測: ${actualPattern}`,
+        description: `「${word}」のアクセントパターンは${dict.pattern}が標準ですが、${actualPattern}と検出されました。`,
         tip: dict.tip,
       });
     } else {
       evalItems.push({
         word,
         status: "error",
-        pitchNote: dict.wrongDesc,
-        description: `「${word}」のアクセントが標準パターン(${dict.pattern})と異なります。`,
+        pitchNote: `実測: ${actualPattern}`,
+        description: `「${word}」のアクセントが標準パターン (${dict.pattern}) と異なります (${actualPattern})。`,
         tip: dict.tip,
       });
     }
@@ -270,45 +389,64 @@ export async function analyzeAudio(
     return order[a.status] - order[b.status];
   });
 
-  // Compute metric scores based on features
-  const accentScore = Math.min(
-    100,
-    Math.max(40, Math.round(matchRatio * 70 + features.zeroCrossingRate * 200 + 10)),
-  );
+  // 4. Compute metrics from real measurements
 
-  const duration = processedBuffer.duration;
-  const charCount = normalizedTranscript.length;
-  const wpm = duration > 0 ? Math.round((charCount / duration) * 60) : 0;
-  // Speech rate score: optimal is 200-300 chars/min
-  const charsPerMin = duration > 0 ? (charCount / duration) * 60 : 250;
+  // --- Accent score: average pattern match across all evaluated words ---
+  const accentScore =
+    wordMatchRatios.length > 0
+      ? Math.round(
+          (wordMatchRatios.reduce((a, b) => a + b, 0) /
+            wordMatchRatios.length) *
+            100,
+        )
+      : 50;
+
+  // --- Speech rate: characters per minute ---
+  const charsPerMin =
+    duration > 0 ? (EXPECTED_TEXT.length / duration) * 60 : 250;
+  const wpm = Math.round(charsPerMin);
+  // Optimal for Japanese: 250–350 chars/min
   const speechRateScore = Math.min(
     100,
-    Math.max(
-      40,
-      Math.round(100 - Math.abs(charsPerMin - 250) * 0.4),
-    ),
+    Math.max(30, Math.round(100 - Math.abs(charsPerMin - 300) * 0.3)),
   );
 
-  // Intonation: based on dynamic range (spectral flatness)
-  const intonationScore = Math.min(
-    100,
-    Math.max(
-      40,
-      Math.round(60 + (1 - features.spectralFlatness) * 40),
-    ),
-  );
+  // --- Intonation: pitch variation of voiced frames ---
+  const voicedPitches = pitches.filter((p) => p > 0);
+  let intonationScore = 50;
+  if (voicedPitches.length > 10) {
+    const mean =
+      voicedPitches.reduce((a, b) => a + b, 0) / voicedPitches.length;
+    const variance =
+      voicedPitches.reduce((a, p) => a + (p - mean) ** 2, 0) /
+      voicedPitches.length;
+    const stdDev = Math.sqrt(variance);
+    // Convert to semitones: 12 * log2(1 + stdDev/mean)
+    const semitoneSpread =
+      12 * Math.log2(1 + stdDev / Math.max(mean, 1));
+    // Good intonation: 2–5 semitone spread
+    if (semitoneSpread >= 2 && semitoneSpread <= 5) {
+      intonationScore = Math.round(
+        80 + (5 - Math.abs(semitoneSpread - 3.5)) * 10,
+      );
+    } else if (semitoneSpread < 2) {
+      // Too flat
+      intonationScore = Math.round(40 + semitoneSpread * 20);
+    } else {
+      // Too erratic
+      intonationScore = Math.round(90 - (semitoneSpread - 5) * 5);
+    }
+    intonationScore = Math.min(100, Math.max(30, intonationScore));
+  }
 
-  // Clarity: based on RMS level (too quiet = low clarity)
+  // --- Clarity: voiced frame ratio (high ratio = clear speech) ---
+  const voicedRatio = voicedPitches.length / Math.max(pitches.length, 1);
   const clarityScore = Math.min(
     100,
-    Math.max(
-      50,
-      Math.round(
-        80 + features.rmsDb * 0.5 + features.zeroCrossingRate * 100,
-      ),
-    ),
+    Math.max(30, Math.round(voicedRatio * 120 + 10)),
   );
 
+  // --- Overall score ---
   const overallScore = Math.round(
     accentScore * 0.35 +
       speechRateScore * 0.2 +
@@ -331,7 +469,7 @@ export async function analyzeAudio(
 
   return {
     overallScore,
-    transcript,
+    transcript: EXPECTED_TEXT,
     evalItems,
     metrics: {
       accent: accentScore,
@@ -343,32 +481,4 @@ export async function analyzeAudio(
     improvementCount,
     label,
   };
-}
-
-/** Simple string similarity (Dice coefficient). */
-function calculateMatchRatio(a: string, b: string): number {
-  if (a.length === 0 || b.length === 0) return 0;
-  const bigrams = (s: string): Set<string> => {
-    const set = new Set<string>();
-    for (let i = 0; i < s.length - 1; i++) {
-      set.add(s.substring(i, i + 2));
-    }
-    return set;
-  };
-  const aBi = bigrams(a);
-  const bBi = bigrams(b);
-  let intersection = 0;
-  for (const bi of aBi) {
-    if (bBi.has(bi)) intersection++;
-  }
-  return (2 * intersection) / (aBi.size + bBi.size);
-}
-
-function hashCode(s: string): number {
-  let hash = 0;
-  for (let i = 0; i < s.length; i++) {
-    hash = (hash << 5) - hash + s.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
 }

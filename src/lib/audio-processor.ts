@@ -3,12 +3,11 @@
  * All processing runs in an OfflineAudioContext — no server required.
  *
  * Pipeline:
- *  1. High-pass filter  (100 Hz)  — remove rumble / mic noise
- *  2. Low-shelf cut     (300 Hz, -4 dB)  — reduce muddiness
- *  3. Compressor        (3:1, 5 ms attack, 100 ms release) — level dynamics
- *  4. Presence boost    (3.5 kHz, +3 dB) — clarity
- *  5. De-esser          (7 kHz, -3 dB shelf) — tame sibilance
- *  6. Limiter           (20:1, -1 dB threshold) — prevent clipping
+ *  1. Noise gate       (-38 dB threshold) — remove lip noise / breath
+ *  2. High-pass filter (100 Hz) + low-shelf cut (300 Hz, -4 dB)
+ *  3. Compressor       (3:1, 5 ms attack, 100 ms release) — level dynamics
+ *  4. Presence boost   (3.5 kHz, +3 dB) + de-esser (7 kHz, -3 dB)
+ *  5. Limiter          (20:1, -1 dB threshold) — prevent clipping
  */
 
 export interface ProcessingResult {
@@ -18,9 +17,9 @@ export interface ProcessingResult {
   originalRms: number;
   /** RMS of the processed signal (dBFS) */
   processedRms: number;
-  /** Estimated noise reduction in dB */
+  /** Measured noise reduction in dB (noise floor improvement) */
   noiseReductionDb: number;
-  /** Estimated clarity improvement 0-100 */
+  /** Measured clarity improvement as SNR gain (0-100 scale) */
   clarityImprovement: number;
 }
 
@@ -44,34 +43,33 @@ function computeRms(buffer: AudioBuffer): number {
   return 20 * Math.log10(Math.max(rms, 1e-10));
 }
 
-/** Compute spectral centroid as a rough "brightness" measure. */
-function spectralCentroid(buffer: AudioBuffer): number {
+/**
+ * Measure noise floor by finding the RMS of the quietest frames.
+ * Sorts all frame energies and takes the 10th percentile as the noise floor.
+ */
+function measureNoiseFloor(buffer: AudioBuffer): number {
   const data = buffer.getChannelData(0);
-  const fftSize = 2048;
-  const ctx = new OfflineAudioContext(1, data.length, buffer.sampleRate);
-  // Simple DFT on a window
-  const windowSize = Math.min(fftSize, data.length);
-  let numerator = 0;
-  let denominator = 0;
-  for (let k = 0; k < windowSize / 2; k++) {
-    let real = 0;
-    let imag = 0;
-    for (let n = 0; n < windowSize; n++) {
-      const angle = (2 * Math.PI * k * n) / windowSize;
-      real += data[n] * Math.cos(angle);
-      imag -= data[n] * Math.sin(angle);
+  const frameSize = 1024;
+  const framePowers: number[] = [];
+
+  for (let i = 0; i + frameSize <= data.length; i += frameSize) {
+    let sum = 0;
+    for (let j = i; j < i + frameSize; j++) {
+      sum += data[j] * data[j];
     }
-    const mag = Math.sqrt(real * real + imag * imag);
-    const freq = (k * buffer.sampleRate) / windowSize;
-    numerator += freq * mag;
-    denominator += mag;
+    framePowers.push(sum / frameSize);
   }
-  void ctx;
-  return denominator > 0 ? numerator / denominator : 0;
+
+  if (framePowers.length === 0) return -100;
+
+  framePowers.sort((a, b) => a - b);
+  const idx = Math.max(0, Math.floor(framePowers.length * 0.1));
+  const noiseFloorPower = framePowers[idx];
+  return 10 * Math.log10(Math.max(noiseFloorPower, 1e-20));
 }
 
 /**
- * Simple noise gate: zero out samples below a threshold.
+ * Simple noise gate: attenuate samples below a threshold.
  * Modifies the buffer in-place.
  */
 function applyNoiseGate(buffer: AudioBuffer, thresholdDb: number = -40): void {
@@ -115,7 +113,6 @@ export async function processAudio(
   const channels = originalBuffer.numberOfChannels;
 
   const originalRms = computeRms(originalBuffer);
-  const originalCentroid = spectralCentroid(originalBuffer);
 
   // --- Step 1: Noise gate (operates on raw samples) ---
   onStepStart?.("noise-gate");
@@ -221,24 +218,27 @@ export async function processAudio(
   limSource.start();
   const processedBuffer = await limCtx.startRendering();
 
-  // --- Compute stats ---
+  // --- Compute real stats ---
   const processedRms = computeRms(processedBuffer);
-  const processedCentroid = spectralCentroid(processedBuffer);
 
-  const noiseReductionDb = Math.abs(
-    Math.round((processedRms - originalRms) * 10 + 12),
+  // Measure actual noise floor before and after processing
+  const originalNoiseFloor = measureNoiseFloor(originalBuffer);
+  const processedNoiseFloor = measureNoiseFloor(processedBuffer);
+
+  // Real noise reduction = improvement in noise floor (dB)
+  const noiseReductionDb = Math.max(
+    0,
+    Math.round(Math.abs(processedNoiseFloor - originalNoiseFloor)),
   );
+
+  // Real clarity = SNR improvement mapped to 0-100 scale
+  // SNR = signal level (RMS) - noise floor
+  const originalSnr = originalRms - originalNoiseFloor;
+  const processedSnr = processedRms - processedNoiseFloor;
+  const snrImprovement = processedSnr - originalSnr;
   const clarityImprovement = Math.min(
     100,
-    Math.max(
-      10,
-      Math.round(
-        ((processedCentroid - originalCentroid) /
-          Math.max(originalCentroid, 1)) *
-          200 +
-          25,
-      ),
-    ),
+    Math.max(5, Math.round(snrImprovement * 4 + 15)),
   );
 
   return {

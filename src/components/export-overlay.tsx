@@ -19,8 +19,7 @@ interface ExportOverlayProps {
 
 const formats: { label: string; value: ExportFormat }[] = [
   { label: "WAV", value: "wav" },
-  { label: "MP3", value: "mp3" },
-  { label: "M4A", value: "m4a" },
+  { label: "WebM", value: "webm" },
 ];
 
 const qualities: {
@@ -28,9 +27,9 @@ const qualities: {
   detail: string;
   value: ExportQuality;
 }[] = [
-  { label: "SNS用", detail: "128kbps", value: "low" },
-  { label: "標準", detail: "256kbps", value: "standard" },
-  { label: "高品質", detail: "320kbps / 非圧縮", value: "high" },
+  { label: "SNS用", detail: "64kbps", value: "low" },
+  { label: "標準", detail: "128kbps", value: "standard" },
+  { label: "高品質", detail: "192kbps / 非圧縮", value: "high" },
 ];
 
 export function ExportOverlay({
@@ -144,12 +143,6 @@ export function ExportOverlay({
             </>
           )}
         </div>
-
-        {formats[selectedFormat].value !== "wav" && (
-          <div className="text-center text-[10px] text-text-dim/60 mb-4 font-mono">
-            * MP3/M4Aはブラウザ標準のWebMコーデックで出力されます
-          </div>
-        )}
 
         <BigButton
           icon={exported ? Check : Download}
